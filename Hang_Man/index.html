@@ -1,0 +1,963 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Gibbet of the Gem Warden</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💎</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Uncial+Antiqua&family=Alegreya:ital,wght@0,400;0,500;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --stone-dark: #120e16;
+    --stone: #241d2b;
+    --stone-light: #3a3042;
+    --torch: #e8a33d;
+    --torch-dim: #9c6a24;
+    --parchment: #e9d8ae;
+    --parchment-dim: #b5a276;
+    --blood: #a13c2f;
+    --gem: #e8a33d; /* retinted per word by JS */
+    --display: 'Uncial Antiqua', 'Palatino', serif;
+    --body: 'Alegreya', 'Georgia', serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body { height: 100%; }
+
+  body {
+    font-family: var(--body);
+    color: var(--parchment);
+    background: var(--stone-dark);
+    overflow-x: hidden;
+    line-height: 1.55;
+  }
+
+  /* ── Dungeon backdrop: layered stone, mortar lines, vignette, torch glow ── */
+  .dungeon {
+    position: fixed;
+    inset: 0;
+    z-index: -2;
+    background:
+      /* mortar joints of stone blocks */
+      repeating-linear-gradient(0deg, transparent 0 88px, rgba(0,0,0,.42) 88px 92px),
+      repeating-linear-gradient(90deg, transparent 0 140px, rgba(0,0,0,.33) 140px 144px),
+      /* uneven stone shading */
+      radial-gradient(ellipse 60% 40% at 18% 25%, rgba(96,80,110,.22), transparent 70%),
+      radial-gradient(ellipse 50% 45% at 82% 65%, rgba(70,90,80,.16), transparent 70%),
+      radial-gradient(ellipse 70% 55% at 50% 110%, rgba(0,0,0,.75), transparent 70%),
+      linear-gradient(180deg, #1c1622 0%, #141019 55%, #0b080f 100%);
+  }
+  /* offset every second row of blocks so it reads as masonry, not graph paper */
+  .dungeon::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(0deg,
+      transparent 0 92px,
+      rgba(255,255,255,.02) 92px 180px);
+    mix-blend-mode: overlay;
+  }
+  /* grain */
+  .dungeon::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    opacity: .5;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.06 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  .torchglow {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse 34% 46% at 7% 34%, rgba(232,163,61,.16), transparent 70%),
+      radial-gradient(ellipse 34% 46% at 93% 34%, rgba(232,163,61,.16), transparent 70%),
+      radial-gradient(ellipse 90% 70% at 50% 0%, rgba(0,0,0,.5), transparent 60%);
+    animation: flicker 4.2s infinite;
+  }
+  @keyframes flicker {
+    0%, 100% { opacity: 1; }
+    18% { opacity: .82; }
+    31% { opacity: .95; }
+    46% { opacity: .78; }
+    62% { opacity: .98; }
+    77% { opacity: .86; }
+  }
+
+  /* ── Torch sconces ── */
+  .torch {
+    position: fixed;
+    top: 26vh;
+    width: 14px;
+    height: 74px;
+    z-index: 0;
+    pointer-events: none;
+  }
+  .torch.left  { left: 3vw; }
+  .torch.right { right: 3vw; }
+  .torch .stick {
+    position: absolute;
+    bottom: 0; left: 4px;
+    width: 6px; height: 52px;
+    background: linear-gradient(180deg, #4a3421, #2b1d12);
+    border-radius: 3px;
+  }
+  .torch .flame {
+    position: absolute;
+    top: 0; left: -2px;
+    width: 18px; height: 26px;
+    border-radius: 50% 50% 45% 45% / 70% 70% 30% 30%;
+    background: radial-gradient(ellipse at 50% 80%, #fff3c4 0%, var(--torch) 42%, #c05a1e 75%, transparent 100%);
+    filter: blur(1px);
+    transform-origin: 50% 100%;
+    animation: lick 380ms infinite alternate ease-in-out;
+  }
+  @keyframes lick {
+    from { transform: scaleY(1) skewX(-3deg); }
+    to   { transform: scaleY(1.22) skewX(4deg); }
+  }
+
+  /* ── Layout shell ── */
+  .hall {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem 1.25rem 4rem;
+    position: relative;
+  }
+
+  .screen { display: none; width: 100%; max-width: 620px; }
+  .screen.active { display: block; animation: emerge .6s ease-out; }
+  @keyframes emerge {
+    from { opacity: 0; transform: translateY(14px); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  h1, h2 {
+    font-family: var(--display);
+    font-weight: 400;
+    color: var(--torch);
+    text-shadow: 0 0 24px rgba(232,163,61,.35), 0 2px 2px rgba(0,0,0,.8);
+    line-height: 1.25;
+  }
+  h1 { font-size: clamp(1.7rem, 5vw, 2.6rem); text-align: center; }
+  h2 { font-size: clamp(1.3rem, 4vw, 1.9rem); text-align: center; }
+
+  .tale {
+    margin: 1.4rem auto 0;
+    max-width: 52ch;
+    font-size: 1.06rem;
+    color: var(--parchment);
+  }
+  .tale em { color: var(--torch); font-style: italic; }
+  .tale + .tale { margin-top: .8rem; }
+
+  /* ── Buttons ── */
+  .rune-btn {
+    font-family: var(--display);
+    font-size: 1.05rem;
+    color: var(--stone-dark);
+    background: linear-gradient(180deg, #f0c25e, var(--torch) 55%, #c07d22);
+    border: 1px solid #6b4a12;
+    border-radius: 6px;
+    padding: .8rem 2.2rem;
+    cursor: pointer;
+    box-shadow: 0 3px 0 #6b4a12, 0 6px 18px rgba(232,163,61,.25);
+    transition: transform .12s, box-shadow .12s;
+    display: block;
+    margin: 2rem auto 0;
+  }
+  .rune-btn:hover  { transform: translateY(-2px); box-shadow: 0 5px 0 #6b4a12, 0 10px 24px rgba(232,163,61,.35); }
+  .rune-btn:active { transform: translateY(1px);  box-shadow: 0 2px 0 #6b4a12; }
+  .rune-btn:focus-visible { outline: 3px solid var(--parchment); outline-offset: 3px; }
+  .rune-btn:disabled { filter: grayscale(.7) brightness(.7); cursor: not-allowed; }
+
+  /* ── Name entry ── */
+  .party-form { margin-top: 2rem; display: grid; gap: 1rem; }
+  .party-form label {
+    display: block;
+    font-size: .95rem;
+    color: var(--parchment-dim);
+    margin-bottom: .3rem;
+  }
+  .party-form input {
+    width: 100%;
+    font-family: var(--body);
+    font-size: 1.15rem;
+    color: var(--parchment);
+    background: rgba(0,0,0,.4);
+    border: 1px solid var(--stone-light);
+    border-radius: 6px;
+    padding: .7rem .9rem;
+  }
+  .party-form input:focus {
+    outline: none;
+    border-color: var(--torch);
+    box-shadow: 0 0 0 3px rgba(232,163,61,.2);
+  }
+  .form-warn { color: var(--blood); min-height: 1.4em; text-align: center; margin-top: .8rem; filter: brightness(1.5); }
+
+  /* ── Turn order reveal ── */
+  .order-list { margin: 2rem auto 0; max-width: 380px; display: grid; gap: .8rem; }
+  .order-slot {
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+    background: rgba(0,0,0,.35);
+    border: 1px solid var(--stone-light);
+    border-left: 4px solid var(--torch);
+    border-radius: 6px;
+    padding: .7rem 1.1rem;
+    opacity: 0;
+    animation: emerge .5s ease-out forwards;
+  }
+  .order-slot:nth-child(2) { animation-delay: .5s; }
+  .order-slot:nth-child(3) { animation-delay: 1s; }
+  .order-slot .ordinal { font-family: var(--display); color: var(--torch); font-size: .95rem; width: 4.4rem; }
+  .order-slot .adventurer { font-size: 1.2rem; font-weight: 700; }
+
+  /* ── Trial chamber ── */
+  .loop-banner {
+    text-align: center;
+    font-size: .95rem;
+    color: var(--parchment-dim);
+    margin-bottom: .4rem;
+  }
+  .loop-banner strong { color: var(--torch); font-weight: 700; }
+
+  .party-tracker {
+    display: flex;
+    justify-content: center;
+    gap: .6rem;
+    margin: .8rem 0 1.4rem;
+    flex-wrap: wrap;
+  }
+  .tracker-chip {
+    font-size: .92rem;
+    padding: .3rem .85rem;
+    border-radius: 99px;
+    border: 1px solid var(--stone-light);
+    color: var(--parchment-dim);
+    background: rgba(0,0,0,.3);
+  }
+  .tracker-chip.now {
+    border-color: var(--gem);
+    color: var(--parchment);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--gem) 45%, transparent);
+  }
+  .tracker-chip.freed { border-color: #5f8f6a; color: #9fc9aa; }
+  .tracker-chip.freed::before { content: '✦ '; }
+
+  .trial-stage {
+    display: grid;
+    grid-template-columns: 150px 1fr;
+    gap: 1.6rem;
+    align-items: start;
+    background: rgba(0,0,0,.32);
+    border: 1px solid var(--stone-light);
+    border-radius: 10px;
+    padding: 1.5rem;
+    box-shadow: inset 0 0 60px rgba(0,0,0,.5);
+  }
+  @media (max-width: 560px) {
+    .trial-stage { grid-template-columns: 1fr; justify-items: center; }
+  }
+
+  .gibbet svg { width: 150px; height: 190px; display: block; }
+  .gibbet .beam { stroke: #5a4630; stroke-width: 7; stroke-linecap: round; }
+  .gibbet .rope { stroke: #8a7550; stroke-width: 2.5; }
+  .gibbet .soul { stroke: #c9c2de; stroke-width: 3; fill: none; stroke-linecap: round; opacity: 0; transition: opacity .4s; }
+  .gibbet .soul.lit { opacity: .95; }
+  .gibbet .soul-head.lit { fill: rgba(201,194,222,.12); }
+
+  .riddle-keeper { min-width: 0; }
+  .turn-line {
+    font-family: var(--display);
+    font-size: 1.15rem;
+    color: var(--gem);
+    text-shadow: 0 0 14px color-mix(in srgb, var(--gem) 55%, transparent);
+    margin-bottom: .6rem;
+  }
+  .riddle {
+    font-style: italic;
+    font-size: 1.04rem;
+    color: var(--parchment);
+    border-left: 3px solid var(--gem);
+    padding-left: .9rem;
+    margin-bottom: 1.3rem;
+  }
+
+  .blanks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .45rem;
+    margin-bottom: 1.1rem;
+  }
+  .blank {
+    width: 2rem;
+    height: 2.6rem;
+    display: grid;
+    place-items: center;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--parchment);
+    border-bottom: 3px solid var(--gem);
+    text-shadow: 0 0 10px color-mix(in srgb, var(--gem) 60%, transparent);
+  }
+  .blank.revealed { animation: gemflash .5s ease-out; }
+  @keyframes gemflash {
+    0% { transform: scale(1.4); color: var(--gem); }
+    100% { transform: scale(1); }
+  }
+
+  .miss-meter { font-size: .95rem; color: var(--parchment-dim); margin-bottom: 1rem; }
+  .miss-meter .skull { color: var(--blood); filter: brightness(1.6); letter-spacing: .2em; }
+
+  .keyboard {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(2.2rem, 1fr));
+    gap: .4rem;
+    max-width: 420px;
+  }
+  .key {
+    font-family: var(--body);
+    font-size: 1.05rem;
+    font-weight: 500;
+    color: var(--parchment);
+    background: var(--stone);
+    border: 1px solid var(--stone-light);
+    border-radius: 5px;
+    padding: .45rem 0;
+    cursor: pointer;
+    transition: background .12s, transform .12s;
+  }
+  .key:hover:not(:disabled) { background: var(--stone-light); transform: translateY(-1px); }
+  .key:focus-visible { outline: 2px solid var(--torch); outline-offset: 2px; }
+  .key:disabled { cursor: default; opacity: .9; }
+  .key.hit  { background: color-mix(in srgb, var(--gem) 35%, var(--stone)); border-color: var(--gem); color: #fff; opacity: 1; }
+  .key.miss { background: #3d1712; border-color: var(--blood); color: #d98a7e; opacity: .55; }
+
+  /* ── Verdicts ── */
+  .verdict h2 { margin-bottom: .5rem; }
+  .gem-reveal {
+    text-align: center;
+    font-family: var(--display);
+    font-size: 1.5rem;
+    color: var(--gem);
+    text-shadow: 0 0 20px color-mix(in srgb, var(--gem) 70%, transparent);
+    margin: 1rem 0 .4rem;
+  }
+  .gem-lore { text-align: center; color: var(--parchment-dim); max-width: 46ch; margin: 0 auto; }
+
+  .rewind {
+    text-align: center;
+  }
+  .rewind .loop-count {
+    font-family: var(--display);
+    font-size: 2.6rem;
+    color: var(--blood);
+    filter: brightness(1.5);
+    text-shadow: 0 0 30px rgba(161,60,47,.6);
+    margin: 1rem 0;
+    animation: spinback 1.4s ease-in-out;
+  }
+  @keyframes spinback {
+    0%   { transform: rotate(0) scale(.4); opacity: 0; }
+    60%  { transform: rotate(-360deg) scale(1.15); opacity: 1; }
+    100% { transform: rotate(-360deg) scale(1); }
+  }
+
+  .victory .gem-row {
+    display: flex;
+    justify-content: center;
+    gap: 1.2rem;
+    font-size: 2.2rem;
+    margin: 1.4rem 0;
+  }
+  .victory .gem-row span { animation: risefloat 2.6s ease-in-out infinite alternate; }
+  .victory .gem-row span:nth-child(2) { animation-delay: .4s; }
+  .victory .gem-row span:nth-child(3) { animation-delay: .8s; }
+  @keyframes risefloat {
+    from { transform: translateY(0); }
+    to   { transform: translateY(-10px); }
+  }
+
+  .door-open {
+    margin: 1.6rem auto 0;
+    width: 120px;
+    height: 150px;
+    border-radius: 60px 60px 6px 6px;
+    background: radial-gradient(ellipse at 50% 30%, #f6e6b8 0%, var(--torch) 45%, rgba(232,163,61,0) 78%);
+    box-shadow: 0 0 60px rgba(232,163,61,.5);
+    animation: doorlight 3s ease-in-out infinite alternate;
+  }
+  @keyframes doorlight {
+    from { filter: brightness(.9); }
+    to   { filter: brightness(1.25); }
+  }
+
+  /* ── Sound toggle ── */
+  .sound-toggle {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 5;
+    font-family: var(--body);
+    font-size: .9rem;
+    color: var(--parchment-dim);
+    background: rgba(0,0,0,.45);
+    border: 1px solid var(--stone-light);
+    border-radius: 99px;
+    padding: .45rem .95rem;
+    cursor: pointer;
+  }
+  .sound-toggle:hover { color: var(--parchment); border-color: var(--torch-dim); }
+  .sound-toggle:focus-visible { outline: 2px solid var(--torch); outline-offset: 2px; }
+
+  /* body flash on wrong guess / loop reset */
+  body.jolt { animation: jolt .35s; }
+  @keyframes jolt {
+    0%, 100% { transform: none; }
+    25% { transform: translateX(-6px); }
+    60% { transform: translateX(5px); }
+  }
+  body.rewinding .dungeon,
+  body.rewinding .torchglow { animation: rewindtint 1.6s ease-in-out; }
+  @keyframes rewindtint {
+    0%, 100% { filter: none; }
+    50% { filter: hue-rotate(-40deg) brightness(1.5) contrast(1.2); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+    .order-slot { opacity: 1; }
+  }
+</style>
+</head>
+<body>
+<div class="dungeon" aria-hidden="true"></div>
+<div class="torchglow" aria-hidden="true"></div>
+<div class="torch left" aria-hidden="true"><div class="flame"></div><div class="stick"></div></div>
+<div class="torch right" aria-hidden="true"><div class="flame"></div><div class="stick"></div></div>
+
+<button class="sound-toggle" id="soundToggle" aria-pressed="false">🔇 dungeon sound off</button>
+
+<main class="hall">
+
+  <!-- 1 · Intro & party names -->
+  <section class="screen active" id="screen-intro" aria-labelledby="introTitle">
+    <h1 id="introTitle">The Gibbet of the Gem Warden</h1>
+    <p class="tale">The heavy door slams shut behind you, and the echo takes far too long to die.
+      Torchlight crawls across wet stone. In the center of the chamber stands a gibbet, and beside it,
+      a figure in a cloak of crushed <em>velvet the color of every gemstone at once</em>.</p>
+    <p class="tale">"Three souls, one loop," the Warden says. "I hold a stone in my fist for each of you,
+      drawn from the twelve months of the year. Name your stone from its riddle, letter by letter.
+      Fail — any one of you — and the hour rewinds. You will stand at this door again, and again,
+      until <em>all three</em> name their stones true."</p>
+    <p class="tale">Speak your names, adventurers.</p>
+
+    <form class="party-form" id="partyForm">
+      <div>
+        <label for="name1">First adventurer</label>
+        <input id="name1" type="text" maxlength="20" autocomplete="off" required>
+      </div>
+      <div>
+        <label for="name2">Second adventurer</label>
+        <input id="name2" type="text" maxlength="20" autocomplete="off" required>
+      </div>
+      <div>
+        <label for="name3">Third adventurer</label>
+        <input id="name3" type="text" maxlength="20" autocomplete="off" required>
+      </div>
+      <p class="form-warn" id="formWarn" role="alert"></p>
+      <button type="submit" class="rune-btn">Step into the loop</button>
+    </form>
+  </section>
+
+  <!-- 2 · Fate decides the order -->
+  <section class="screen" id="screen-order" aria-labelledby="orderTitle">
+    <h2 id="orderTitle">The Warden casts the bones…</h2>
+    <p class="tale" style="text-align:center">Fate decides who faces the gibbet first.</p>
+    <div class="order-list" id="orderList"></div>
+    <button class="rune-btn" id="beginTrialBtn">Face the gibbet</button>
+  </section>
+
+  <!-- 3 · The trial -->
+  <section class="screen" id="screen-trial" aria-labelledby="turnLine">
+    <p class="loop-banner">Time loop <strong id="loopNum">1</strong></p>
+    <div class="party-tracker" id="partyTracker"></div>
+
+    <div class="trial-stage">
+      <div class="gibbet" aria-hidden="true">
+        <svg viewBox="0 0 150 190">
+          <line class="beam" x1="20" y1="182" x2="120" y2="182"/>
+          <line class="beam" x1="45" y1="182" x2="45" y2="14"/>
+          <line class="beam" x1="45" y1="14" x2="105" y2="14"/>
+          <line class="beam" x1="45" y1="44" x2="70" y2="14"/>
+          <line class="rope" x1="105" y1="14" x2="105" y2="38"/>
+          <!-- the soul-wisp assembles piece by piece -->
+          <circle class="soul soul-head" id="p0" cx="105" cy="52" r="13"/>
+          <line class="soul" id="p1" x1="105" y1="65" x2="105" y2="110"/>
+          <line class="soul" id="p2" x1="105" y1="75" x2="85"  y2="96"/>
+          <line class="soul" id="p3" x1="105" y1="75" x2="125" y2="96"/>
+          <line class="soul" id="p4" x1="105" y1="110" x2="88" y2="138"/>
+          <line class="soul" id="p5" x1="105" y1="110" x2="122" y2="138"/>
+        </svg>
+      </div>
+
+      <div class="riddle-keeper">
+        <p class="turn-line" id="turnLine"></p>
+        <p class="riddle" id="riddle"></p>
+        <div class="blanks" id="blanks"></div>
+        <p class="miss-meter" id="missMeter"></p>
+        <div class="keyboard" id="keyboard"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4a · One adventurer freed -->
+  <section class="screen verdict" id="screen-freed" aria-labelledby="freedTitle">
+    <h2 id="freedTitle"></h2>
+    <p class="gem-reveal" id="freedGem"></p>
+    <p class="gem-lore" id="freedLore"></p>
+    <button class="rune-btn" id="nextTurnBtn">Next adventurer</button>
+  </section>
+
+  <!-- 4b · Loop resets -->
+  <section class="screen rewind" id="screen-rewind" aria-labelledby="rewindTitle">
+    <h2 id="rewindTitle">The hour unravels</h2>
+    <p class="gem-reveal" id="rewindGem"></p>
+    <p class="tale" style="text-align:center" id="rewindTale"></p>
+    <p class="loop-count" id="rewindLoopNum"></p>
+    <p class="tale" style="text-align:center">The Warden reshuffles fate. New stones. New order. Same door.</p>
+    <button class="rune-btn" id="rewindBtn">Wake at the door again</button>
+  </section>
+
+  <!-- 5 · Victory -->
+  <section class="screen victory" id="screen-victory" aria-labelledby="victoryTitle">
+    <h2 id="victoryTitle">The loop shatters</h2>
+    <div class="gem-row" aria-hidden="true"><span>💎</span><span>💠</span><span>🔮</span></div>
+    <p class="tale" style="text-align:center" id="victoryTale"></p>
+    <p class="tale" style="text-align:center">The Warden bows and steps aside. Stone grinds against stone,
+      and the far wall splits open onto a torchlit stair descending into the dark.</p>
+    <div class="door-open" aria-hidden="true"></div>
+    <button class="rune-btn" id="continueBtn">Continue into the dungeon</button>
+  </section>
+
+</main>
+
+<script>
+'use strict';
+
+/* ────────────────────────────────────────────────
+   The Warden's hoard: 15 stones tied to the months.
+   Each carries a riddle and a color that tints the UI.
+   ──────────────────────────────────────────────── */
+const HOARD = [
+  { word: 'GARNET',      color: '#c0392b',
+    hint: 'Deep red as pomegranate seeds, I guard travelers born when the year is newest.',
+    lore: 'January’s stone — medieval knights carried it as protection on the road.' },
+  { word: 'AMETHYST',    color: '#9b59b6',
+    hint: 'The Greeks swore my purple crystal kept a drinker’s mind clear; I ward the shortest month.',
+    lore: 'February’s stone — its name comes from the Greek for “not drunk.”' },
+  { word: 'AQUAMARINE',  color: '#5dade2',
+    hint: 'My very name is Latin for the water of the sea; sailors trusted me for calm voyages in early spring.',
+    lore: 'March’s stone — Romans believed it was treasure washed up from mermaids.' },
+  { word: 'DIAMOND',     color: '#d6eaf8',
+    hint: 'Hardest thing in nature, forged under crushing depths, I can score glass — and I open the fourth month.',
+    lore: 'April’s stone — nothing on Earth scratches it except another of its kind.' },
+  { word: 'EMERALD',     color: '#2ecc71',
+    hint: 'Cleopatra claimed my green mines for herself; I arrive when spring is fully awake.',
+    lore: 'May’s stone — Egypt’s queens prized it above nearly all treasure.' },
+  { word: 'PEARL',       color: '#f5eef0',
+    hint: 'I am the only gem grown by a living creature, built layer upon layer inside a shell.',
+    lore: 'June’s stone — no mining required, only patience and an oyster.' },
+  { word: 'ALEXANDRITE', color: '#7dcea0',
+    hint: 'Green by daylight, red by candlelight — a June stone that changes its colors, named for a Russian tsar.',
+    lore: 'June’s rarer stone — collectors call it “emerald by day, ruby by night.”' },
+  { word: 'MOONSTONE',   color: '#aeb6e8',
+    hint: 'My ghostly blue-white sheen was believed to be trapped light from the night sky’s great lantern.',
+    lore: 'June’s third stone — Romans thought it was solidified moonlight.' },
+  { word: 'RUBY',        color: '#e74c3c',
+    hint: 'Red king of gems in the hottest month; my name is simply Latin for my color.',
+    lore: 'July’s stone — in Sanskrit it was called ratnaraj, “king of gems.”' },
+  { word: 'PERIDOT',     color: '#a9c93a',
+    hint: 'Olive-green, I ride to the surface inside volcanoes — and sometimes fall from the sky on meteorites.',
+    lore: 'August’s stone — one of the few gems found in space rocks.' },
+  { word: 'SAPPHIRE',    color: '#2e6bc4',
+    hint: 'Royal blue cousin of the ruby — we are the same mineral in different clothes. Harvest month claims me.',
+    lore: 'September’s stone — ruby and sapphire are both corundum.' },
+  { word: 'OPAL',        color: '#e8b4d8',
+    hint: 'I flash every color at once, like fire trapped in milk, in the month when the leaves burn.',
+    lore: 'October’s stone — its play of color comes from tiny silica spheres bending light.' },
+  { word: 'TOURMALINE',  color: '#d35d8e',
+    hint: 'October’s other stone: I can hold a whole rainbow in one crystal, and I grow electric when heated.',
+    lore: 'October’s second stone — it really does build an electric charge when warmed.' },
+  { word: 'TOPAZ',       color: '#e6a817',
+    hint: 'A golden stone for the month of feasts, I may take my name from an island in the Red Sea.',
+    lore: 'November’s stone — the island of Topazios was famed in the ancient world.' },
+  { word: 'TURQUOISE',   color: '#48c9b0',
+    hint: 'Sky-blue at winter’s door, prized by Aztec kings and Egyptian pharaohs, named for the land of the Turks.',
+    lore: 'December’s stone — one of the first gems ever mined by humankind.' },
+];
+
+const MAX_MISSES = 6;
+
+/* ── State ── */
+const state = {
+  names: [],       // entered once, kept across loops
+  order: [],       // shuffled copy of names for this loop
+  words: [],       // one HOARD entry per adventurer this loop
+  turn: 0,         // whose trial is running
+  loop: 1,
+  guessed: new Set(),
+  misses: 0,
+};
+
+/* ── Helpers ── */
+const $ = id => document.getElementById(id);
+
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function show(screenId) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  $(screenId).classList.add('active');
+  window.scrollTo({ top: 0 });
+}
+
+const ORDINALS = ['First into the dark', 'Second to face it', 'Last to stand'];
+
+/* ── Loop setup: shuffle order, deal distinct stones ── */
+function dealNewLoop() {
+  state.order = shuffle(state.names);
+  state.words = shuffle(HOARD).slice(0, 3);
+  state.turn = 0;
+}
+
+function showOrderScreen() {
+  const list = $('orderList');
+  list.innerHTML = '';
+  state.order.forEach((name, i) => {
+    const slot = document.createElement('div');
+    slot.className = 'order-slot';
+    slot.innerHTML = `<span class="ordinal">${ORDINALS[i]}</span><span class="adventurer"></span>`;
+    slot.querySelector('.adventurer').textContent = name;
+    list.appendChild(slot);
+  });
+  show('screen-order');
+}
+
+/* ── Trial rendering ── */
+function startTurn() {
+  state.guessed = new Set();
+  state.misses = 0;
+
+  const entry = state.words[state.turn];
+  document.documentElement.style.setProperty('--gem', entry.color);
+
+  $('loopNum').textContent = state.loop;
+  $('turnLine').textContent = `${state.order[state.turn]}, name your stone.`;
+  $('riddle').textContent = `“${entry.hint}”`;
+
+  const tracker = $('partyTracker');
+  tracker.innerHTML = '';
+  state.order.forEach((name, i) => {
+    const chip = document.createElement('span');
+    chip.className = 'tracker-chip'
+      + (i < state.turn ? ' freed' : '')
+      + (i === state.turn ? ' now' : '');
+    chip.textContent = name;
+    tracker.appendChild(chip);
+  });
+
+  renderBlanks();
+  renderKeyboard();
+  renderMissMeter();
+  for (let i = 0; i < MAX_MISSES; i++) $('p' + i).classList.remove('lit');
+
+  show('screen-trial');
+}
+
+function renderBlanks() {
+  const entry = state.words[state.turn];
+  const holder = $('blanks');
+  holder.innerHTML = '';
+  for (const ch of entry.word) {
+    const cell = document.createElement('span');
+    cell.className = 'blank';
+    if (state.guessed.has(ch)) {
+      cell.textContent = ch;
+      cell.classList.add('revealed');
+    }
+    holder.appendChild(cell);
+  }
+}
+
+function renderKeyboard() {
+  const kb = $('keyboard');
+  kb.innerHTML = '';
+  const entry = state.words[state.turn];
+  for (let c = 65; c <= 90; c++) {
+    const letter = String.fromCharCode(c);
+    const key = document.createElement('button');
+    key.className = 'key';
+    key.textContent = letter;
+    key.dataset.letter = letter;
+    if (state.guessed.has(letter)) {
+      key.disabled = true;
+      key.classList.add(entry.word.includes(letter) ? 'hit' : 'miss');
+    }
+    key.addEventListener('click', () => guess(letter));
+    kb.appendChild(key);
+  }
+}
+
+function renderMissMeter() {
+  const left = MAX_MISSES - state.misses;
+  $('missMeter').innerHTML =
+    `The rope tightens: <span class="skull">${'☠︎ '.repeat(state.misses)}</span>` +
+    `${left} ${left === 1 ? 'mistake' : 'mistakes'} left`;
+}
+
+/* ── Guessing ── */
+function guess(letter) {
+  if (!$('screen-trial').classList.contains('active')) return;
+  if (state.guessed.has(letter)) return;
+  state.guessed.add(letter);
+
+  const entry = state.words[state.turn];
+  if (entry.word.includes(letter)) {
+    sfx.correct();
+    renderBlanks();
+    renderKeyboard();
+    if ([...entry.word].every(ch => state.guessed.has(ch))) {
+      setTimeout(turnWon, 650);
+    }
+  } else {
+    state.misses++;
+    sfx.wrong();
+    document.body.classList.remove('jolt');
+    void document.body.offsetWidth; /* restart animation */
+    document.body.classList.add('jolt');
+    $('p' + (state.misses - 1)).classList.add('lit');
+    renderKeyboard();
+    renderMissMeter();
+    if (state.misses >= MAX_MISSES) setTimeout(loopFailed, 900);
+  }
+}
+
+/* ── Outcomes ── */
+function turnWon() {
+  const entry = state.words[state.turn];
+  const name = state.order[state.turn];
+  sfx.freed();
+  $('freedTitle').textContent = `${name} names the stone true`;
+  $('freedGem').textContent = `✦ ${entry.word} ✦`;
+  $('freedLore').textContent = entry.lore;
+
+  state.turn++;
+  if (state.turn >= 3) {
+    $('nextTurnBtn').textContent = 'The last chain breaks…';
+  } else {
+    $('nextTurnBtn').textContent = `Next adventurer: ${state.order[state.turn]}`;
+  }
+  show('screen-freed');
+}
+
+function loopFailed() {
+  const entry = state.words[state.turn];
+  const name = state.order[state.turn];
+  sfx.rewind();
+  document.body.classList.add('rewinding');
+  setTimeout(() => document.body.classList.remove('rewinding'), 1700);
+
+  $('rewindGem').textContent = `The stone was ${entry.word}.`;
+  $('rewindTale').textContent =
+    `${name}’s final guess dies in the air. The Warden closes a velvet fist, ` +
+    `the torches gutter out, and time folds back on itself…`;
+  state.loop++;
+  $('rewindLoopNum').textContent = `Loop ${state.loop}`;
+  show('screen-rewind');
+}
+
+function partyWon() {
+  sfx.victory();
+  const roll = [...state.order];
+  $('victoryTale').textContent =
+    `${roll[0]}, ${roll[1]}, and ${roll[2]} — three stones named true in a single hour. ` +
+    `It took ${state.loop === 1 ? 'only one loop' : state.loop + ' loops'}, but the spell is broken. ` +
+    `Congratulations, adventurers!`;
+  show('screen-victory');
+}
+
+/* ── Wire up screens ── */
+$('partyForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const names = [$('name1').value, $('name2').value, $('name3').value]
+    .map(n => n.trim()).filter(Boolean);
+  const unique = new Set(names.map(n => n.toLowerCase()));
+  if (names.length < 3) {
+    $('formWarn').textContent = 'The Warden requires all three names.';
+    return;
+  }
+  if (unique.size < 3) {
+    $('formWarn').textContent = 'Three souls cannot share a name. Choose distinct ones.';
+    return;
+  }
+  $('formWarn').textContent = '';
+  state.names = names;
+  state.loop = 1;
+  sfx.ensureRunning();
+  dealNewLoop();
+  showOrderScreen();
+});
+
+$('beginTrialBtn').addEventListener('click', startTurn);
+
+$('nextTurnBtn').addEventListener('click', () => {
+  if (state.turn >= 3) partyWon();
+  else startTurn();
+});
+
+$('rewindBtn').addEventListener('click', () => {
+  dealNewLoop();
+  showOrderScreen();
+});
+
+$('continueBtn').addEventListener('click', () => {
+  $('continueBtn').textContent = 'Onward, adventurers — the DM takes it from here';
+  $('continueBtn').disabled = true;
+});
+
+/* physical keyboard */
+document.addEventListener('keydown', e => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const letter = e.key.toUpperCase();
+  if (letter.length === 1 && letter >= 'A' && letter <= 'Z'
+      && !(e.target instanceof HTMLInputElement)) {
+    guess(letter);
+  }
+});
+
+/* ────────────────────────────────────────────────
+   Dungeon sound — synthesized with the Web Audio API
+   so the page needs no audio files at all.
+   ──────────────────────────────────────────────── */
+const sfx = (() => {
+  let ctx = null;
+  let ambience = null;
+  let enabled = false;
+
+  function getCtx() {
+    if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+    return ctx;
+  }
+
+  function startAmbience() {
+    const ac = getCtx();
+    const master = ac.createGain();
+    master.gain.value = 0.0;
+    master.connect(ac.destination);
+    master.gain.linearRampToValueAtTime(0.16, ac.currentTime + 2);
+
+    // Low cavern drone: two slightly detuned oscillators
+    const droneGain = ac.createGain();
+    droneGain.gain.value = 0.5;
+    droneGain.connect(master);
+    [55, 55.7].forEach(freq => {
+      const osc = ac.createOscillator();
+      osc.type = 'triangle';
+      osc.frequency.value = freq;
+      osc.connect(droneGain);
+      osc.start();
+    });
+
+    // Torch crackle: looped noise through a bandpass, gain wobbled by an LFO
+    const len = ac.sampleRate * 2;
+    const buf = ac.createBuffer(1, len, ac.sampleRate);
+    const data = buf.getChannelData(0);
+    let last = 0;
+    for (let i = 0; i < len; i++) {          // brown-ish noise
+      last = (last + (Math.random() * 2 - 1) * 0.04) * 0.98;
+      data[i] = last * 3;
+    }
+    const noise = ac.createBufferSource();
+    noise.buffer = buf;
+    noise.loop = true;
+    const bp = ac.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 1400;
+    bp.Q.value = 0.6;
+    const crackleGain = ac.createGain();
+    crackleGain.gain.value = 0.25;
+    const lfo = ac.createOscillator();
+    lfo.type = 'sine';
+    lfo.frequency.value = 0.9;
+    const lfoDepth = ac.createGain();
+    lfoDepth.gain.value = 0.12;
+    lfo.connect(lfoDepth);
+    lfoDepth.connect(crackleGain.gain);
+    noise.connect(bp); bp.connect(crackleGain); crackleGain.connect(master);
+    noise.start(); lfo.start();
+
+    return master;
+  }
+
+  function tone(freq, dur, type = 'sine', vol = 0.18, when = 0) {
+    if (!enabled) return;
+    const ac = getCtx();
+    const t = ac.currentTime + when;
+    const osc = ac.createOscillator();
+    const g = ac.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    osc.connect(g); g.connect(ac.destination);
+    osc.start(t); osc.stop(t + dur);
+  }
+
+  return {
+    toggle() {
+      enabled = !enabled;
+      if (enabled) {
+        getCtx().resume();
+        if (!ambience) ambience = startAmbience();
+        else ambience.gain.linearRampToValueAtTime(0.16, getCtx().currentTime + 0.6);
+      } else if (ambience) {
+        ambience.gain.linearRampToValueAtTime(0, getCtx().currentTime + 0.4);
+      }
+      return enabled;
+    },
+    ensureRunning() { if (enabled && ctx) ctx.resume(); },
+    correct() { tone(660, 0.18, 'sine', 0.14); tone(990, 0.25, 'sine', 0.1, 0.06); },
+    wrong()   { tone(110, 0.4, 'sawtooth', 0.12); tone(82, 0.5, 'sawtooth', 0.1, 0.05); },
+    freed()   { [523, 659, 784].forEach((f, i) => tone(f, 0.35, 'triangle', 0.13, i * 0.12)); },
+    rewind()  { for (let i = 0; i < 10; i++) tone(880 - i * 70, 0.16, 'sine', 0.09, i * 0.1); },
+    victory() { [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, 0.5, 'triangle', 0.13, i * 0.15)); },
+  };
+})();
+
+$('soundToggle').addEventListener('click', () => {
+  const on = sfx.toggle();
+  const btn = $('soundToggle');
+  btn.textContent = on ? '🔥 dungeon sound on' : '🔇 dungeon sound off';
+  btn.setAttribute('aria-pressed', String(on));
+});
+</script>
+</body>
+</html>
